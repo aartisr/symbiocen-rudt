@@ -1,0 +1,6 @@
+{
+  "name": "Symbiocen: Regenerative Urban Digital Twin",
+  "description": "Multi-agent generative AI and digital twin framework for regenerative urban architecture and whole-life carbon optimization.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
