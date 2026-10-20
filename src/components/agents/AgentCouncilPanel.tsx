@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   AgentDebateTurn,
   AgentId,
@@ -7,10 +7,6 @@ import {
   ParameterTweak,
 } from '../../types';
 import {
-  Compass,
-  Activity,
-  Layers,
-  Leaf,
   Sparkles,
   CheckCircle2,
   AlertTriangle,
@@ -21,6 +17,8 @@ import {
   SlidersHorizontal,
   ChevronRight,
 } from 'lucide-react';
+import { AGENT_IDS, getAgentPresentation } from '../../config/agents';
+import { defaultAgentClient, type AgentClient } from '../../services/agentClient';
 
 interface AgentCouncilPanelProps {
   debateTurns: AgentDebateTurn[];
@@ -29,6 +27,7 @@ interface AgentCouncilPanelProps {
   onApplyTweak: (tweak: ParameterTweak) => void;
   parameters: BuildingParameters;
   metrics: SimulationMetrics;
+  client?: AgentClient;
 }
 
 export const AgentCouncilPanel: React.FC<AgentCouncilPanelProps> = ({
@@ -38,6 +37,7 @@ export const AgentCouncilPanel: React.FC<AgentCouncilPanelProps> = ({
   onApplyTweak,
   parameters,
   metrics,
+  client = defaultAgentClient,
 }) => {
   const [selectedAgentForChat, setSelectedAgentForChat] = useState<AgentId | null>(null);
   const [chatQuestion, setChatQuestion] = useState('');
@@ -45,47 +45,9 @@ export const AgentCouncilPanel: React.FC<AgentCouncilPanelProps> = ({
     Array<{ sender: 'user' | 'agent'; text: string; agentName?: string }>
   >([]);
   const [isConsulting, setIsConsulting] = useState(false);
+  const consultationController = useRef<AbortController | null>(null);
 
-  const getAgentMeta = (agentId: AgentId) => {
-    switch (agentId) {
-      case 'architect':
-        return {
-          name: 'Elena Rostova, AIA',
-          role: 'Lead Design Architect',
-          icon: Compass,
-          accent: 'text-amber-400',
-          border: 'border-amber-500/30',
-          bg: 'bg-amber-500/10',
-        };
-      case 'engineer':
-        return {
-          name: 'Marcus Vance, PE, SE',
-          role: 'Senior Structural & MEP Engineer',
-          icon: Activity,
-          accent: 'text-sky-400',
-          border: 'border-sky-500/30',
-          bg: 'bg-sky-500/10',
-        };
-      case 'constructor':
-        return {
-          name: 'David Chen, CCM',
-          role: 'Virtual Construction Manager',
-          icon: Layers,
-          accent: 'text-indigo-400',
-          border: 'border-indigo-500/30',
-          bg: 'bg-indigo-500/10',
-        };
-      case 'ecologist':
-        return {
-          name: 'Dr. Soraya Morales',
-          role: 'Regenerative Systems Ecologist',
-          icon: Leaf,
-          accent: 'text-emerald-400',
-          border: 'border-emerald-500/30',
-          bg: 'bg-emerald-500/10',
-        };
-    }
-  };
+  useEffect(() => () => consultationController.current?.abort(), []);
 
   const handleAskAgent = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,30 +57,36 @@ export const AgentCouncilPanel: React.FC<AgentCouncilPanelProps> = ({
     setChatQuestion('');
     setChatHistory((prev) => [...prev, { sender: 'user', text: userQ }]);
     setIsConsulting(true);
+    consultationController.current?.abort();
+    const controller = new AbortController();
+    consultationController.current = controller;
 
     try {
-      const res = await fetch('/api/agents/consult', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const data = await client.consult(
+        {
           agentId: selectedAgentForChat,
           question: userQ,
           parameters,
           metrics,
-        }),
-      });
-      const data = await res.json();
+        },
+        controller.signal,
+      );
       setChatHistory((prev) => [
         ...prev,
         { sender: 'agent', text: data.reply || 'No answer available.', agentName: data.agentName },
       ]);
     } catch (err) {
-      setChatHistory((prev) => [
-        ...prev,
-        { sender: 'agent', text: 'Consultation service unavailable. Check connection.' },
-      ]);
+      if (!controller.signal.aborted) {
+        setChatHistory((prev) => [
+          ...prev,
+          { sender: 'agent', text: 'Consultation service unavailable. Check connection.' },
+        ]);
+      }
     } finally {
-      setIsConsulting(false);
+      if (consultationController.current === controller) {
+        consultationController.current = null;
+        setIsConsulting(false);
+      }
     }
   };
 
@@ -157,8 +125,8 @@ export const AgentCouncilPanel: React.FC<AgentCouncilPanelProps> = ({
 
       {/* Disciplinary Mentors Quick Select Strip */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 bg-[#0B0F17]/50 border-b border-slate-800/80">
-        {(['architect', 'engineer', 'constructor', 'ecologist'] as AgentId[]).map((agentId) => {
-          const meta = getAgentMeta(agentId);
+        {AGENT_IDS.map((agentId) => {
+          const meta = getAgentPresentation(agentId);
           const Icon = meta.icon;
           const isSelected = selectedAgentForChat === agentId;
           return (
@@ -171,7 +139,7 @@ export const AgentCouncilPanel: React.FC<AgentCouncilPanelProps> = ({
                   : 'bg-slate-850/40 hover:bg-slate-800/60 border border-slate-800/60'
               }`}
             >
-              <div className={`p-1.5 rounded-md ${meta.bg} ${meta.border} ${meta.accent}`}>
+              <div className={`p-1.5 rounded-md ${meta.backgroundClass} ${meta.borderClass} ${meta.accentClass}`}>
                 <Icon className="w-3.5 h-3.5" />
               </div>
               <div className="min-w-0 flex-1">
@@ -191,10 +159,10 @@ export const AgentCouncilPanel: React.FC<AgentCouncilPanelProps> = ({
             <div className="flex items-center justify-between pb-2 border-b border-slate-800">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-semibold text-white">
-                  Consulting: {getAgentMeta(selectedAgentForChat).name}
+                  Consulting: {getAgentPresentation(selectedAgentForChat).name}
                 </span>
                 <span className="text-[11px] text-slate-400">
-                  ({getAgentMeta(selectedAgentForChat).role})
+                  ({getAgentPresentation(selectedAgentForChat).role})
                 </span>
               </div>
               <button
@@ -208,7 +176,7 @@ export const AgentCouncilPanel: React.FC<AgentCouncilPanelProps> = ({
             {/* Chat message list */}
             <div className="flex-1 overflow-y-auto space-y-2.5 min-h-[220px] max-h-[380px] pr-1">
               <div className="p-3 rounded-lg bg-slate-850/60 border border-slate-800 text-xs text-slate-300">
-                Hello student team! I am your {getAgentMeta(selectedAgentForChat).role}. Ask me anything about
+                Hello student team! I am your {getAgentPresentation(selectedAgentForChat).role}. Ask me anything about
                 optimizing the structural sizing, timber prefabrication, daylight autonomy, or emissions for your
                 design.
               </div>
@@ -241,7 +209,7 @@ export const AgentCouncilPanel: React.FC<AgentCouncilPanelProps> = ({
                 type="text"
                 value={chatQuestion}
                 onChange={(e) => setChatQuestion(e.target.value)}
-                placeholder={`Ask ${getAgentMeta(selectedAgentForChat).name.split(',')[0]} a question...`}
+                placeholder={`Ask ${getAgentPresentation(selectedAgentForChat).name.split(',')[0]} a question...`}
                 className="flex-1 px-3 py-2 text-xs rounded-lg bg-[#0B0F17] border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
               />
               <button
@@ -258,7 +226,7 @@ export const AgentCouncilPanel: React.FC<AgentCouncilPanelProps> = ({
           /* Multi-Agent Live Deliberation Turns */
           <>
             {debateTurns.map((turn) => {
-              const meta = getAgentMeta(turn.agentId);
+              const meta = getAgentPresentation(turn.agentId);
               const Icon = meta.icon;
 
               return (
@@ -269,7 +237,7 @@ export const AgentCouncilPanel: React.FC<AgentCouncilPanelProps> = ({
                   {/* Agent Card Header */}
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      <div className={`p-1.5 rounded-md ${meta.bg} ${meta.border} ${meta.accent}`}>
+                      <div className={`p-1.5 rounded-md ${meta.backgroundClass} ${meta.borderClass} ${meta.accentClass}`}>
                         <Icon className="w-4 h-4" />
                       </div>
                       <div>

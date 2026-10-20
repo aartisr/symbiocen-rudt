@@ -1,0 +1,10 @@
+{
+  "name": "Symbiocen — Regenerative Urban Digital Twin",
+  "short_name": "Symbiocen",
+  "description": "Explore regenerative urban design across carbon, energy, daylight, structure, and ecology.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#070A10",
+  "theme_color": "#070A10",
+  "lang": "en-US"
+}

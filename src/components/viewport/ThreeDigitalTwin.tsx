@@ -1,8 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { memo, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { BuildingParameters, ShaderMode, SimulationMetrics } from '../../types';
+import { disposeObject3D } from '../../viewport/disposeObject3D';
 import {
   Sun,
   Layers,
@@ -350,12 +351,12 @@ export function computeSunlightExposureScore(params: BuildingParameters): Sunlig
 interface ThreeDigitalTwinProps {
   parameters: BuildingParameters;
   metrics: SimulationMetrics;
-  onParameterChange: (key: keyof BuildingParameters, value: any) => void;
+  onParameterChange: <Key extends keyof BuildingParameters>(key: Key, value: BuildingParameters[Key]) => void;
   shaderMode: ShaderMode;
   onShaderModeChange: (mode: ShaderMode) => void;
 }
 
-export const ThreeDigitalTwin: React.FC<ThreeDigitalTwinProps> = ({
+const ThreeDigitalTwinComponent: React.FC<ThreeDigitalTwinProps> = ({
   parameters,
   metrics,
   onParameterChange,
@@ -363,7 +364,9 @@ export const ThreeDigitalTwin: React.FC<ThreeDigitalTwinProps> = ({
   onShaderModeChange,
 }) => {
   const mountRef = useRef<HTMLDivElement>(null);
-  const [controlsCollapsed, setControlsCollapsed] = useState(false);
+  const [controlsCollapsed, setControlsCollapsed] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches,
+  );
   const [isFullscreen, setIsFullscreen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -383,11 +386,11 @@ export const ThreeDigitalTwin: React.FC<ThreeDigitalTwinProps> = ({
   const lastTimeSyncRef = useRef<number>(0);
 
   // Derived current solar coordinates for reactive UI HUD and controls
-  const currentSolar = computeSolarCoordinates(timeOfDay);
+  const currentSolar = useMemo(() => computeSolarCoordinates(timeOfDay), [timeOfDay]);
 
   // Dynamic Sunlight Exposure Score & Bioclimatic Analysis
   const [showSolarDetails, setShowSolarDetails] = useState(false);
-  const exposureAnalysis = computeSunlightExposureScore(parameters);
+  const exposureAnalysis = useMemo(() => computeSunlightExposureScore(parameters), [parameters]);
 
   // Wind Flow Vector Field Simulation State
   const [isWindOverlayActive, setIsWindOverlayActive] = useState(false);
@@ -446,7 +449,7 @@ export const ThreeDigitalTwin: React.FC<ThreeDigitalTwinProps> = ({
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.15;
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
 
     container.appendChild(renderer.domElement);
 
@@ -462,7 +465,8 @@ export const ThreeDigitalTwin: React.FC<ThreeDigitalTwinProps> = ({
 
     // 5. Environment & Studio Lighting
     const pmremGenerator = new THREE.PMREMGenerator(renderer);
-    scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
+    const environmentTexture = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
+    scene.environment = environmentTexture;
     pmremGenerator.dispose();
 
     // Key Light (Sun)
@@ -601,10 +605,12 @@ export const ThreeDigitalTwin: React.FC<ThreeDigitalTwinProps> = ({
     }
 
     // Animation Render Loop
-    let clock = new THREE.Clock();
+    const timer = new THREE.Timer();
+    timer.connect(document);
     const animate = () => {
       animFrameId.current = requestAnimationFrame(animate);
-      const delta = clock.getDelta();
+      timer.update();
+      const delta = timer.getDelta();
 
       // Smoothly update controls
       controls.update();
@@ -644,7 +650,9 @@ export const ThreeDigitalTwin: React.FC<ThreeDigitalTwinProps> = ({
       }
 
       if (sceneRef.current) {
-        sceneRef.current.background = new THREE.Color(solar.bgHex);
+        if (sceneRef.current.background instanceof THREE.Color) {
+          sceneRef.current.background.setHex(solar.bgHex);
+        }
         if (sceneRef.current.fog) {
           sceneRef.current.fog.color.setHex(solar.bgHex);
         }
@@ -777,18 +785,18 @@ export const ThreeDigitalTwin: React.FC<ThreeDigitalTwinProps> = ({
       renderer.setSize(w, h);
     };
 
-    window.addEventListener('resize', handleResize);
+    const resizeObserver = new ResizeObserver(handleResize);
+    resizeObserver.observe(container);
 
     return () => {
-      window.removeEventListener('resize', handleResize);
+      resizeObserver.disconnect();
       if (animFrameId.current) cancelAnimationFrame(animFrameId.current);
-      windGeo.dispose();
-      windMat.dispose();
-      windwardPlaneGeo.dispose();
-      windwardPlaneMat.dispose();
-      leewardPlaneGeo.dispose();
-      leewardPlaneMat.dispose();
+      timer.dispose();
+      controls.dispose();
+      disposeObject3D(scene);
+      environmentTexture.dispose();
       pmremGenerator.dispose();
+      renderer.renderLists.dispose();
       renderer.dispose();
       if (container.contains(renderer.domElement)) {
         container.removeChild(renderer.domElement);
@@ -801,17 +809,8 @@ export const ThreeDigitalTwin: React.FC<ThreeDigitalTwinProps> = ({
     const buildingGroup = buildingGroupRef.current;
     if (!buildingGroup) return;
 
-    // Clean existing meshes
-    while (buildingGroup.children.length > 0) {
-      const child = buildingGroup.children[0] as THREE.Mesh;
-      if (child.geometry) child.geometry.dispose();
-      if (Array.isArray(child.material)) {
-        child.material.forEach((m) => m.dispose());
-      } else if (child.material) {
-        child.material.dispose();
-      }
-      buildingGroup.remove(child);
-    }
+    disposeObject3D(buildingGroup);
+    buildingGroup.clear();
 
     const {
       typology,
@@ -982,6 +981,7 @@ export const ThreeDigitalTwin: React.FC<ThreeDigitalTwinProps> = ({
       const colHeight = floorHeight - slabThickness;
 
       const colGeo = new THREE.BoxGeometry(colWidth, colHeight, colWidth);
+      const columnPositions: Array<[number, number]> = [];
 
       for (let ix = 0; ix <= numBaysX; ix++) {
         for (let iz = 0; iz <= numBaysZ; iz++) {
@@ -993,12 +993,20 @@ export const ThreeDigitalTwin: React.FC<ThreeDigitalTwinProps> = ({
             continue;
           }
 
-          const colMesh = new THREE.Mesh(colGeo, timberColMat);
-          colMesh.position.set(cx, floorBaseY + slabThickness + colHeight / 2, cz);
-          colMesh.castShadow = true;
-          floorGroup.add(colMesh);
+          columnPositions.push([cx, cz]);
         }
       }
+
+      const columns = new THREE.InstancedMesh(colGeo, timberColMat, columnPositions.length);
+      const columnTransform = new THREE.Object3D();
+      columnPositions.forEach(([x, z], index) => {
+        columnTransform.position.set(x, floorBaseY + slabThickness + colHeight / 2, z);
+        columnTransform.updateMatrix();
+        columns.setMatrixAt(index, columnTransform.matrix);
+      });
+      columns.castShadow = true;
+      columns.instanceMatrix.needsUpdate = true;
+      floorGroup.add(columns);
 
       // Facade Glazing Envelope panels
       const facadeHeight = floorHeight - slabThickness;
@@ -1082,7 +1090,21 @@ export const ThreeDigitalTwin: React.FC<ThreeDigitalTwinProps> = ({
 
     // Orient building massing according to orientationAzimuth relative to True North
     buildingGroup.rotation.y = (-parameters.orientationAzimuth * Math.PI) / 180;
-  }, [parameters, shaderMode]);
+  }, [
+    parameters.typology,
+    parameters.floors,
+    parameters.floorHeight,
+    parameters.footprintWidth,
+    parameters.footprintDepth,
+    parameters.baySpacing,
+    parameters.windowToWallRatio,
+    parameters.shadingLouverDepth,
+    parameters.primaryStructure,
+    parameters.greenRoofCoverage,
+    parameters.photovoltaicCoverage,
+    parameters.explodedViewProgress,
+    shaderMode,
+  ]);
 
   // Reset Camera View
   const handleResetCamera = () => {
@@ -1107,13 +1129,13 @@ export const ThreeDigitalTwin: React.FC<ThreeDigitalTwinProps> = ({
   return (
     <div
       ref={containerRef}
-      className="relative w-full h-full min-h-[500px] overflow-hidden bg-[#0A0E17] flex flex-col"
+      className="relative w-full h-full min-h-0 overflow-hidden bg-[#0A0E17] flex flex-col"
     >
       {/* 3D WebGL Canvas Container */}
       <div ref={mountRef} className="w-full h-full flex-1 cursor-grab active:cursor-grabbing" />
 
       {/* Top Left Spec HUD & Sunlight Exposure Score Badge */}
-      <div className="absolute top-4 left-4 z-10 flex flex-col gap-2 max-w-[calc(100vw-360px)]">
+      <div className="absolute top-4 left-4 z-10 hidden lg:flex flex-col gap-2 max-w-[calc(100vw-360px)]">
         {/* Main Spec Pill */}
         <div className="flex items-center flex-wrap gap-2 px-3 py-1.5 rounded-lg bg-[#0B0F17]/85 backdrop-blur-md border border-slate-800 text-xs text-slate-300 pointer-events-none select-none shadow-lg">
           <span className="font-semibold text-white tracking-wide">
@@ -1307,9 +1329,10 @@ export const ThreeDigitalTwin: React.FC<ThreeDigitalTwinProps> = ({
               : 'bg-[#0B0F17]/85 hover:bg-slate-800 border-slate-800 text-slate-300 hover:text-white'
           }`}
           title={isWindOverlayActive ? 'Disable Wind Flow Overlay' : 'Enable Wind Flow & Pressure Gradient Vector Field'}
+          aria-label={isWindOverlayActive ? 'Disable wind flow overlay' : 'Enable wind flow overlay'}
         >
           <Wind className={`w-3.5 h-3.5 shrink-0 ${isWindOverlayActive ? 'text-white' : 'text-sky-400'}`} />
-          <span className="whitespace-nowrap font-mono">
+          <span className="hidden sm:inline whitespace-nowrap font-mono">
             {isWindOverlayActive ? `${windSpeedMs.toFixed(1)} m/s · Wind Flow` : 'Wind Vectors'}
           </span>
         </button>
@@ -1323,13 +1346,14 @@ export const ThreeDigitalTwin: React.FC<ThreeDigitalTwinProps> = ({
               : 'bg-[#0B0F17]/85 hover:bg-slate-800 border-slate-800 text-slate-300 hover:text-white'
           }`}
           title={isSolarAnimating ? 'Pause Solar Shadow Simulation' : 'Scrub or Play 24-Hour Solar Shadow Movement'}
+          aria-label={isSolarAnimating ? 'Pause solar shadow simulation' : 'Play solar shadow simulation'}
         >
           {isSolarAnimating ? (
             <Pause className="w-3.5 h-3.5 shrink-0" />
           ) : (
             <Play className="w-3.5 h-3.5 text-amber-400 shrink-0" />
           )}
-          <span className="whitespace-nowrap font-mono">
+          <span className="hidden sm:inline whitespace-nowrap font-mono">
             {isSolarAnimating ? `${currentSolar.timeStr} · Pause` : `${currentSolar.timeStr} · Sun Path`}
           </span>
         </button>
@@ -1366,7 +1390,7 @@ export const ThreeDigitalTwin: React.FC<ThreeDigitalTwinProps> = ({
 
         {/* Floating Dock Content */}
         {!controlsCollapsed && (
-          <div className="p-3.5 rounded-xl bg-[#0E1524]/95 backdrop-blur-md border border-slate-800/80 shadow-2xl">
+          <div className="max-h-72 overflow-y-auto p-3.5 rounded-xl bg-[#0E1524]/95 backdrop-blur-md border border-slate-800/80 shadow-2xl lg:max-h-none lg:overflow-visible">
             {/* Row 1: Shader Modes & Exploded View Slider */}
             <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800/70">
               {/* Shader Mode Selector */}
@@ -1591,7 +1615,7 @@ export const ThreeDigitalTwin: React.FC<ThreeDigitalTwinProps> = ({
                       setTimeOfDay(val);
                       timeOfDayRef.current = val;
                     }}
-                    className="w-full h-2.5 bg-gradient-to-r from-indigo-950 via-amber-700/60 via-amber-400 via-amber-700/60 to-indigo-950 rounded-lg appearance-none cursor-pointer accent-amber-400 shadow-inner"
+                    className="w-full h-2.5 bg-gradient-to-r from-indigo-950 via-amber-400 to-indigo-950 rounded-lg appearance-none cursor-pointer accent-amber-400 shadow-inner"
                     title="Scrub 24-hour solar time to view dynamic shadow casting across building massing and context"
                   />
                 </div>
@@ -1780,3 +1804,5 @@ export const ThreeDigitalTwin: React.FC<ThreeDigitalTwinProps> = ({
     </div>
   );
 };
+
+export const ThreeDigitalTwin = memo(ThreeDigitalTwinComponent);

@@ -187,7 +187,7 @@ export const CarbonInventoryTable: React.FC<CarbonInventoryTableProps> = ({
               <span>Embodied Intensity</span>
               <Info className="w-3 h-3 text-slate-500" />
             </div>
-            <div className="flex items-baseline gap-2">
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
               <span className="text-lg font-bold font-mono tabular-nums text-white">
                 {metrics.embodiedCarbon.perSqMeter}
               </span>
@@ -208,7 +208,7 @@ export const CarbonInventoryTable: React.FC<CarbonInventoryTableProps> = ({
 
           <div>
             <div className="text-slate-400 mb-0.5">Biogenic Atmospheric Carbon</div>
-            <div className="flex items-baseline gap-1.5">
+            <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-1">
               <span className="text-lg font-bold font-mono tabular-nums text-emerald-400">
                 -{(metrics.embodiedCarbon.biogenicCarbonStoredKg / 1000).toFixed(0)}
               </span>
@@ -218,7 +218,7 @@ export const CarbonInventoryTable: React.FC<CarbonInventoryTableProps> = ({
 
           <div>
             <div className="text-slate-400 mb-0.5">Circularity Index</div>
-            <div className="flex items-baseline gap-1.5">
+            <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-1">
               <span className="text-lg font-bold font-mono tabular-nums text-white">
                 {metrics.embodiedCarbon.circularityIndex}%
               </span>

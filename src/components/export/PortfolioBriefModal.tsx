@@ -56,6 +56,8 @@ export const PortfolioBriefModal: React.FC<PortfolioBriefModalProps> = ({
             <button
               onClick={onClose}
               className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
+              aria-label="Close sustainability brief"
+              title="Close sustainability brief"
             >
               <X className="w-5 h-5" />
             </button>

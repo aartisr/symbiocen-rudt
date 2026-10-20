@@ -1,4 +1,5 @@
 import express, { Request, Response } from 'express';
+import { readFile } from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
@@ -14,7 +15,36 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
+/**
+ * Public URL is deliberately configurable because canonical URLs must match the
+ * deployed origin. Set SITE_URL (for example https://example.org) in production.
+ */
+function getPublicSiteUrl(req: Request): string {
+  const configured = (process.env.SITE_URL || process.env.APP_URL)?.trim().replace(/\/$/, '');
+  if (configured && /^https?:\/\/[^\s/]+/i.test(configured)) return configured;
+
+  const forwardedProto = req.get('x-forwarded-proto')?.split(',')[0]?.trim();
+  const protocol = forwardedProto === 'https' ? 'https' : req.protocol;
+  const requestedHost = req.get('host') || '';
+  const host = /^[a-z0-9.-]+(?::\d+)?$/i.test(requestedHost)
+    ? requestedHost
+    : `localhost:${PORT}`;
+  return `${protocol}://${host}`;
+}
+
 app.use(express.json());
+
+// Crawler entry points. These are served by Express in both development and
+// production so their origin always reflects the deployed host.
+app.get('/robots.txt', (req: Request, res: Response) => {
+  const siteUrl = getPublicSiteUrl(req);
+  res.type('text/plain').send(`User-agent: *\nAllow: /\n\nSitemap: ${siteUrl}/sitemap.xml\n`);
+});
+
+app.get('/sitemap.xml', (req: Request, res: Response) => {
+  const siteUrl = getPublicSiteUrl(req);
+  res.type('application/xml').send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url>\n    <loc>${siteUrl}/</loc>\n    <changefreq>weekly</changefreq>\n    <priority>1.0</priority>\n  </url>\n</urlset>`);
+});
 
 // Initialize Gemini SDK with telemetry header
 const ai = new GoogleGenAI({
@@ -397,9 +427,18 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.resolve(__dirname, 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (_req: Request, res: Response) => {
-      res.sendFile(path.resolve(distPath, 'index.html'));
+    // Let the route below render index.html so canonical and schema URLs can
+    // be resolved to the live deployment origin; assets remain cacheable files.
+    app.use(express.static(distPath, { index: false }));
+    app.get('*', async (req: Request, res: Response) => {
+      try {
+        const siteUrl = getPublicSiteUrl(req);
+        const index = await readFile(path.resolve(distPath, 'index.html'), 'utf8');
+        res.setHeader('Link', `<${siteUrl}${req.path === '/' ? '/' : req.path}>; rel="canonical"`);
+        res.type('html').send(index.replaceAll('__SITE_URL__', siteUrl));
+      } catch (err) {
+        res.status(500).send('Unable to load application shell.');
+      }
     });
   }
 

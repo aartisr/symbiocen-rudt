@@ -13,7 +13,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   onOpenExportModal,
 }) => {
   return (
-    <header className="flex items-center justify-between gap-8 px-6 py-3.5 bg-[#0A0E17] border-b border-slate-800/80 shrink-0 z-30">
+    <header className="flex items-center justify-between gap-3 px-3 sm:gap-8 sm:px-6 py-3.5 bg-[#0A0E17] border-b border-slate-800/80 shrink-0 z-30">
       {/* Zone 1: Single text element wordmark */}
       <a
         href="#"
@@ -66,10 +66,12 @@ export const TopBar: React.FC<TopBarProps> = ({
       <div className="flex items-center gap-3 shrink-0">
         <button
           onClick={onOpenExportModal}
-          className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors whitespace-nowrap shrink-0 active:scale-95 shadow-sm"
+          className="flex items-center gap-1.5 p-2 sm:px-3.5 sm:py-1.5 text-xs font-semibold text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors whitespace-nowrap shrink-0 active:scale-95 shadow-sm"
+          aria-label="Export sustainability brief"
+          title="Export sustainability brief"
         >
           <Award className="w-3.5 h-3.5 text-amber-400" />
-          <span>Export Brief</span>
+          <span className="hidden sm:inline">Export Brief</span>
         </button>
       </div>
     </header>

@@ -1,0 +1,25 @@
+# Symbiocen
+
+> An interactive regenerative urban design digital twin for exploring whole-life carbon, operational energy, daylight, structures, ecology, materials, and climate-responsive architecture.
+
+Symbiocen is an educational and research prototype. It helps students and multidisciplinary building teams make early-stage trade-offs visible by coupling a parametric 3D building model with transparent, deterministic surrogate simulations and a multi-agent design council.
+
+## Core capabilities
+
+- Parametric regenerative building and urban design exploration
+- Whole-life embodied-carbon and biogenic-carbon-storage signals
+- Operational energy, photovoltaic yield, and net-zero-readiness indicators
+- Daylight autonomy, annual sunlight exposure, and glare-risk signals
+- Structural wind-deflection and drift checks
+- Green-cover, stormwater-retention, microclimate, and biodiversity indicators
+- EC3-inspired material inventory and circularity comparisons
+- Architect, engineer, constructor, and ecologist design perspectives
+
+## Responsible use
+
+Symbiocen provides immediate comparative feedback, not certified project analysis. Its surrogate equations do not replace validated whole-building energy models, finite-element analysis, computational fluid dynamics, certified environmental product declarations, code review, or licensed professional judgment.
+
+## Primary resource
+
+- [Interactive application](/)
+
