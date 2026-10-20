@@ -364,9 +364,9 @@ const ThreeDigitalTwinComponent: React.FC<ThreeDigitalTwinProps> = ({
   onShaderModeChange,
 }) => {
   const mountRef = useRef<HTMLDivElement>(null);
-  const [controlsCollapsed, setControlsCollapsed] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches,
-  );
+  // Keep the digital twin unobstructed on first load. The dock remains one
+  // click away through the clearly labelled Parametric Controls toggle.
+  const [controlsCollapsed, setControlsCollapsed] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
