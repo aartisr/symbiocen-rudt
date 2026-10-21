@@ -1,8 +1,7 @@
 import { lazy, Suspense, useState } from 'react';
 import { ShaderMode } from './types';
 import { TopBar } from './components/navigation/TopBar';
-import { ThreeDigitalTwin } from './components/viewport/ThreeDigitalTwin';
-import { AgentCouncilPanel } from './components/agents/AgentCouncilPanel';
+import { FeatureBoundary } from './components/system/FeatureBoundary';
 import { useDesignParameters } from './hooks/useDesignParameters';
 import { useSimulation } from './hooks/useSimulation';
 import { useAgentCouncil } from './hooks/useAgentCouncil';
@@ -13,6 +12,15 @@ import {
   Sparkles,
 } from 'lucide-react';
 
+// Each workspace panel is an independently deployable feature boundary. This
+// keeps the app shell fast and prevents the Three.js renderer from inflating
+// the initial JavaScript required for navigation and page chrome.
+const ThreeDigitalTwin = lazy(() =>
+  import('./components/viewport/ThreeDigitalTwin').then((module) => ({ default: module.ThreeDigitalTwin })),
+);
+const AgentCouncilPanel = lazy(() =>
+  import('./components/agents/AgentCouncilPanel').then((module) => ({ default: module.AgentCouncilPanel })),
+);
 const CarbonInventoryTable = lazy(() =>
   import('./components/inventory/CarbonInventoryTable').then((module) => ({ default: module.CarbonInventoryTable })),
 );
@@ -63,13 +71,17 @@ function SymbiocenApp() {
       <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden">
         {/* Left Pane: 3D Digital Twin Viewport (52% on desktop) */}
         <div className="w-full lg:w-[52%] h-[55dvh] lg:h-full min-w-0 min-h-0 relative overflow-hidden border-r border-slate-800/80 shrink-0">
-          <ThreeDigitalTwin
-            parameters={parameters}
-            metrics={metrics}
-            onParameterChange={updateParameter}
-            shaderMode={shaderMode}
-            onShaderModeChange={setShaderMode}
-          />
+          <FeatureBoundary featureName="3D digital twin">
+            <Suspense fallback={<FeatureFallback />}>
+              <ThreeDigitalTwin
+                parameters={parameters}
+                metrics={metrics}
+                onParameterChange={updateParameter}
+                shaderMode={shaderMode}
+                onShaderModeChange={setShaderMode}
+              />
+            </Suspense>
+          </FeatureBoundary>
         </div>
 
         {/* Right Pane: Multi-Agent Council & Metabolic Engineering Tools (48%) */}
@@ -137,43 +149,68 @@ function SymbiocenApp() {
           {/* Active Tab Viewport Area */}
           <div className="flex-1 overflow-hidden p-3.5">
             <Suspense fallback={<FeatureFallback />}>
-              {activeRightTab === 'agents' && (
-                <AgentCouncilPanel
-                  debateTurns={debateTurns}
-                  isDeliberating={isDeliberating}
-                  onTriggerDeliberation={triggerDeliberation}
-                  onApplyTweak={applyTweak}
-                  parameters={parameters}
-                  metrics={metrics}
-                />
-              )}
+              <FeatureBoundary featureName="Workspace panel" resetKey={activeRightTab}>
+                {activeRightTab === 'agents' && (
+                  <AgentCouncilPanel
+                    debateTurns={debateTurns}
+                    isDeliberating={isDeliberating}
+                    onTriggerDeliberation={triggerDeliberation}
+                    onApplyTweak={applyTweak}
+                    parameters={parameters}
+                    metrics={metrics}
+                  />
+                )}
 
-              {activeRightTab === 'inventory' && (
-                <CarbonInventoryTable
-                  items={materials}
-                  metrics={metrics}
-                  onApplyAlternative={applyAlternative}
-                />
-              )}
+                {activeRightTab === 'inventory' && (
+                  <CarbonInventoryTable
+                    items={materials}
+                    metrics={metrics}
+                    onApplyAlternative={applyAlternative}
+                  />
+                )}
 
-              {activeRightTab === 'graph' && (
-                <SystemsCoDesignGraph
-                  parameters={parameters}
-                  metrics={metrics}
-                />
-              )}
+                {activeRightTab === 'graph' && (
+                  <SystemsCoDesignGraph
+                    parameters={parameters}
+                    metrics={metrics}
+                  />
+                )}
 
-              {activeRightTab === 'site' && (
-                <SiteStudio
-                  parameters={parameters}
-                  onParameterChange={updateParameter}
-                  onApplyStrategy={applyStrategy}
-                />
-              )}
+                {activeRightTab === 'site' && (
+                  <SiteStudio
+                    parameters={parameters}
+                    onParameterChange={updateParameter}
+                    onApplyStrategy={applyStrategy}
+                  />
+                )}
+              </FeatureBoundary>
             </Suspense>
           </div>
         </div>
       </div>
+
+      <footer className="flex shrink-0 items-center justify-center border-t border-slate-800/80 bg-[#0A0E17] px-4 py-2 text-center text-[10px] text-slate-500 sm:text-xs">
+        <span>
+          Designed by{' '}
+          <a
+            href="https://ai-aarti.com"
+            target="_blank"
+            rel="noreferrer"
+            className="text-slate-400 transition-colors hover:text-amber-400"
+          >
+            Aarti S Ravikumar
+          </a>{' '}
+          for ACE Program ·{' '}
+          <a
+            href="https://saugus.pioneercss.org"
+            target="_blank"
+            rel="noreferrer"
+            className="text-slate-400 transition-colors hover:text-amber-400"
+          >
+            PCSS II
+          </a>
+        </span>
+      </footer>
 
       {/* Sustainability Portfolio Brief Export Modal */}
       {isExportModalOpen && (

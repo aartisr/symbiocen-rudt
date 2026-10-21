@@ -4,6 +4,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { BuildingParameters, ShaderMode, SimulationMetrics } from '../../types';
 import { disposeObject3D } from '../../viewport/disposeObject3D';
+import { RangeControl } from '../ui/RangeControl';
 import {
   Sun,
   Layers,
@@ -1720,83 +1721,54 @@ const ThreeDigitalTwinComponent: React.FC<ThreeDigitalTwinProps> = ({
 
             {/* Row 2: Live Parametric Massing Adjusters */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-2 text-xs">
-              {/* Floors */}
-              <div>
-                <div className="flex justify-between text-slate-400 mb-1">
-                  <span>Storeys</span>
-                  <span className="font-mono tabular-nums text-white">{parameters.floors}</span>
-                </div>
-                <input
-                  type="range"
-                  min="3"
-                  max="28"
-                  value={parameters.floors}
-                  onChange={(e) => onParameterChange('floors', parseInt(e.target.value, 10))}
-                  className="w-full accent-amber-500 cursor-pointer"
-                />
-              </div>
-
-              {/* Window-to-Wall Ratio */}
-              <div>
-                <div className="flex justify-between text-slate-400 mb-1">
-                  <span>Window-to-Wall</span>
-                  <span className="font-mono tabular-nums text-white">
-                    {Math.round(parameters.windowToWallRatio * 100)}%
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min="0.2"
-                  max="0.8"
-                  step="0.05"
-                  value={parameters.windowToWallRatio}
-                  onChange={(e) => onParameterChange('windowToWallRatio', parseFloat(e.target.value))}
-                  className="w-full accent-amber-500 cursor-pointer"
-                />
-              </div>
-
-              {/* Shading Louver Depth */}
-              <div>
-                <div className="flex justify-between text-slate-400 mb-1">
-                  <span>Sun Louvers</span>
-                  <span className="font-mono tabular-nums text-white">{parameters.shadingLouverDepth.toFixed(1)}m</span>
-                </div>
-                <input
-                  type="range"
-                  min="0.0"
-                  max="1.2"
-                  step="0.1"
-                  value={parameters.shadingLouverDepth}
-                  onChange={(e) => onParameterChange('shadingLouverDepth', parseFloat(e.target.value))}
-                  className="w-full accent-amber-500 cursor-pointer"
-                />
-              </div>
-
-              {/* Site True North Orientation */}
-              <div>
-                <div className="flex justify-between items-center text-slate-400 mb-1">
+              <RangeControl
+                label="Storeys"
+                value={parameters.floors}
+                displayValue={parameters.floors}
+                min={3}
+                max={28}
+                onChange={(value) => onParameterChange('floors', Math.round(value))}
+              />
+              <RangeControl
+                label="Window-to-Wall"
+                value={parameters.windowToWallRatio}
+                displayValue={`${Math.round(parameters.windowToWallRatio * 100)}%`}
+                min={0.2}
+                max={0.8}
+                step={0.05}
+                onChange={(value) => onParameterChange('windowToWallRatio', value)}
+              />
+              <RangeControl
+                label="Sun Louvers"
+                value={parameters.shadingLouverDepth}
+                displayValue={`${parameters.shadingLouverDepth.toFixed(1)}m`}
+                min={0}
+                max={1.2}
+                step={0.1}
+                onChange={(value) => onParameterChange('shadingLouverDepth', value)}
+              />
+              <RangeControl
+                label={
                   <span className="flex items-center gap-1">
                     <Compass className="w-3 h-3 text-amber-400" />
                     <span>Site Orientation</span>
                   </span>
-                  <span className="font-mono tabular-nums text-white">{parameters.orientationAzimuth}°</span>
-                </div>
-                <input
-                  type="range"
-                  min="0"
-                  max="360"
-                  step="15"
-                  value={parameters.orientationAzimuth}
-                  onChange={(e) => onParameterChange('orientationAzimuth', parseInt(e.target.value, 10))}
-                  className="w-full accent-amber-500 cursor-pointer"
-                  title="Rotate building massing relative to site True North"
-                />
-                <div className="flex justify-between text-[10px] text-slate-500 font-mono mt-0.5">
-                  <span>North (0°)</span>
-                  <span>South (180°)</span>
-                  <span>North (360°)</span>
-                </div>
-              </div>
+                }
+                value={parameters.orientationAzimuth}
+                displayValue={`${parameters.orientationAzimuth}°`}
+                min={0}
+                max={360}
+                step={15}
+                onChange={(value) => onParameterChange('orientationAzimuth', Math.round(value))}
+                title="Rotate building massing relative to site True North"
+                footer={
+                  <div className="flex justify-between text-[10px] text-slate-500 font-mono mt-0.5">
+                    <span>North (0°)</span>
+                    <span>South (180°)</span>
+                    <span>North (360°)</span>
+                  </div>
+                }
+              />
             </div>
           </div>
         )}
